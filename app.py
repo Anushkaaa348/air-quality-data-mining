@@ -30,15 +30,49 @@ def load(f):
 
 
 @st.cache_data
-def preprocess(raw):
-    df = raw.drop_duplicates().copy()
-    df["Date"] = pd.to_datetime(df["Date"])
-    df = df.dropna(subset=["AQI", "AQI_Bucket"])           # need a target
-    df[POLL] = df.groupby("City")[POLL].transform(lambda s: s.fillna(s.median()))
-    df[POLL] = df[POLL].fillna(df[POLL].median())          # city with no data at all
-    for c in POLL:                                         # cap outliers at 99th percentile
-        df[c] = df[c].clip(upper=df[c].quantile(0.99))
-    return df
+@st.cache_resource
+def train(df):
+    X = df[POLL]
+    y_aqi = df["AQI"]
+    y_class = df["AQI_Bucket"]
+
+    Xtr, Xte, ytr_aqi, yte_aqi, ytr_class, yte_class = train_test_split(
+        X,
+        y_aqi,
+        y_class,
+        test_size=0.2,
+        random_state=42,
+        stratify=y_class
+    )
+
+    reg = LinearRegression().fit(Xtr, ytr_aqi)
+
+    params = {
+        "criterion": ["gini", "entropy"],
+        "max_depth": [6, 8, 10, 12, 15, None],
+        "min_samples_split": [2, 5, 10],
+        "min_samples_leaf": [1, 2, 4]
+    }
+
+    grid = GridSearchCV(
+        DecisionTreeClassifier(random_state=42),
+        params,
+        cv=5,
+        scoring="accuracy",
+        n_jobs=-1
+    )
+
+    grid.fit(Xtr, ytr_class)
+    dt = grid.best_estimator_
+
+    nb = GaussianNB().fit(Xtr, ytr_class)
+
+    yte = pd.DataFrame({
+        "AQI": yte_aqi.values,
+        "AQI_Bucket": yte_class.values
+    })
+
+    return reg, dt, nb, Xte, yte
 
 
 @st.cache_resource
