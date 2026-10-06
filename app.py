@@ -28,8 +28,22 @@ up = "city_day.csv"
 def load(f):
     return pd.read_csv(f)
 
-
 @st.cache_data
+def preprocess(raw):
+    df = raw.drop_duplicates().copy()
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.dropna(subset=["AQI", "AQI_Bucket"])
+
+    df[POLL] = df.groupby("City")[POLL].transform(
+        lambda s: s.fillna(s.median())
+    )
+
+    df[POLL] = df[POLL].fillna(df[POLL].median())
+
+    for c in POLL:
+        df[c] = df[c].clip(upper=df[c].quantile(0.99))
+
+    return df
 @st.cache_resource
 def train(df):
     X = df[POLL]
