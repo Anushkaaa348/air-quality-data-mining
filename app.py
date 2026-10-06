@@ -43,13 +43,47 @@ def preprocess(raw):
 
 @st.cache_resource
 def train(df):
-    Xtr, Xte, ytr, yte = train_test_split(
-        df[POLL], df[["AQI", "AQI_Bucket"]], test_size=0.2, random_state=42)
-    reg = LinearRegression().fit(Xtr, ytr["AQI"])
-    dt = DecisionTreeClassifier(criterion="entropy", max_depth=6, random_state=42).fit(Xtr, ytr["AQI_Bucket"])
-    nb = GaussianNB().fit(Xtr, ytr["AQI_Bucket"])
-    return reg, dt, nb, Xte, yte
+    X = df[POLL]
+    y_aqi = df["AQI"]
+    y_class = df["AQI_Bucket"]
 
+    Xtr, Xte, ytr_aqi, yte_aqi, ytr_class, yte_class = train_test_split(
+        X,
+        y_aqi,
+        y_class,
+        test_size=0.2,
+        random_state=42,
+        stratify=y_class
+    )
+
+    reg = LinearRegression().fit(Xtr, ytr_aqi)
+
+    params = {
+        "criterion": ["gini", "entropy"],
+        "max_depth": [6, 8, 10, 12, 15, None],
+        "min_samples_split": [2, 5, 10],
+        "min_samples_leaf": [1, 2, 4]
+    }
+
+    grid = GridSearchCV(
+        DecisionTreeClassifier(random_state=42),
+        params,
+        cv=5,
+        scoring="accuracy",
+        n_jobs=-1
+    )
+
+    grid.fit(Xtr, ytr_class)
+    dt = grid.best_estimator_
+
+    nb = GaussianNB().fit(Xtr, ytr_class)
+
+    yte = pd.DataFrame({
+        "AQI": yte_aqi.values,
+        "AQI_Bucket": yte_class.values
+    })
+
+    return reg, dt, nb, Xte, yte
 
 raw = load(up)
 df = preprocess(raw)
@@ -90,7 +124,7 @@ with t2:
 with t3:
     st.write("Target: **AQI_Bucket** (Good, Satisfactory, Moderate, Poor, Very Poor, Severe)")
     res = {}
-    for name, m in [("Decision Tree (J48-like)", dt), ("Naive Bayes", nb)]:
+    for name, m in [("Decision Tree ", dt), ("Naive Bayes", nb)]:
         res[name] = accuracy_score(yte["AQI_Bucket"], m.predict(Xte))
     c1, c2 = st.columns(2)
     for col, (n, a) in zip([c1, c2], res.items()):
