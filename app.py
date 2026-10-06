@@ -17,13 +17,11 @@ POLL = ["PM2.5", "PM10", "NO", "NO2", "NH3", "CO", "SO2", "O3"]
 # ---------------- Load data ----------------
 import os
 
-up = st.sidebar.file_uploader("Or upload city_day.csv", type="csv")
-if up is None and os.path.exists("city_day.csv"):
-    up = "city_day.csv"          # auto-load if the file is next to app.py
-    st.sidebar.success("Loaded city_day.csv from project folder")
-if up is None:
-    st.info("Place city_day.csv in the same folder as app.py, or upload it from the sidebar.")
+if not os.path.exists("city_day.csv"):
+    st.error("city_day.csv not found in the project folder.")
     st.stop()
+
+up = "city_day.csv"
 
 
 @st.cache_data
