@@ -181,8 +181,18 @@ with t3:
     model = dt if choice.startswith("Decision") else nb
     st.dataframe(pd.crosstab(yte["AQI_Bucket"], model.predict(Xte),
                              rownames=["Actual"], colnames=["Predicted"]))
-    st.subheader("Decision tree - feature importance")
-    st.bar_chart(pd.Series(dt.feature_importances_, index=POLL))
+st.subheader(f"{choice} - Feature Importance")
+
+if choice.startswith("Decision"):
+    importance = pd.Series(dt.feature_importances_, index=POLL)
+else:
+    # Gaussian Naive Bayes: use the difference between class means
+    importance = pd.Series(
+        abs(nb.theta_.max(axis=0) - nb.theta_.min(axis=0)),
+        index=POLL
+    )
+
+st.bar_chart(importance)
 
 # ---------------- 4. Clustering ----------------
 with t4:
