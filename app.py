@@ -6,14 +6,33 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import r2_score, mean_absolute_error, accuracy_score
+from sklearn.metrics import (
+    r2_score,
+    mean_absolute_error,
+    accuracy_score,
+    precision_score,
+    recall_score
+)
 from mlxtend.frequent_patterns import apriori, association_rules
 import os
 
-st.set_page_config(page_title="Air Quality Analysis", layout="wide")
+st.set_page_config(
+    page_title="Air Quality Analysis",
+    layout="wide"
+)
+
 st.title("Air Quality Analysis - India (Data Mining Mini Project)")
 
-POLL = ["PM2.5", "PM10", "NO", "NO2", "NH3", "CO", "SO2", "O3"]
+POLL = [
+    "PM2.5",
+    "PM10",
+    "NO",
+    "NO2",
+    "NH3",
+    "CO",
+    "SO2",
+    "O3"
+]
 
 
 # ---------------- Load data ----------------
@@ -36,13 +55,17 @@ def preprocess(raw):
 
     df["Date"] = pd.to_datetime(df["Date"])
 
-    df = df.dropna(subset=["AQI", "AQI_Bucket"])
+    df = df.dropna(
+        subset=["AQI", "AQI_Bucket"]
+    )
 
     df[POLL] = df.groupby("City")[POLL].transform(
         lambda s: s.fillna(s.median())
     )
 
-    df[POLL] = df[POLL].fillna(df[POLL].median())
+    df[POLL] = df[POLL].fillna(
+        df[POLL].median()
+    )
 
     for c in POLL:
         df[c] = df[c].clip(
@@ -54,6 +77,7 @@ def preprocess(raw):
 
 @st.cache_resource
 def train(df):
+
     X = df[POLL]
     y_aqi = df["AQI"]
     y_class = df["AQI_Bucket"]
@@ -76,9 +100,24 @@ def train(df):
     # Decision Tree tuning
     params = {
         "criterion": ["gini", "entropy"],
-        "max_depth": [6, 8, 10, 12, 15, None],
-        "min_samples_split": [2, 5, 10],
-        "min_samples_leaf": [1, 2, 4]
+        "max_depth": [
+            6,
+            8,
+            10,
+            12,
+            15,
+            None
+        ],
+        "min_samples_split": [
+            2,
+            5,
+            10
+        ],
+        "min_samples_leaf": [
+            1,
+            2,
+            4
+        ]
     }
 
     grid = GridSearchCV(
@@ -109,10 +148,17 @@ def train(df):
         "AQI_Bucket": yte_class.values
     })
 
-    return reg, dt, nb, Xte, yte
+    return (
+        reg,
+        dt,
+        nb,
+        Xte,
+        yte
+    )
 
 
 raw = load(up)
+
 df = preprocess(raw)
 
 reg, dt, nb, Xte, yte = train(df)
@@ -151,7 +197,9 @@ with t1:
         df["City"].nunique()
     )
 
-    st.subheader("Missing values before cleaning")
+    st.subheader(
+        "Missing values before cleaning"
+    )
 
     st.dataframe(
         raw.isna()
@@ -161,27 +209,37 @@ with t1:
         .T
     )
 
-    st.subheader("Average AQI by city")
+    st.subheader(
+        "Average AQI by city"
+    )
 
     st.bar_chart(
         df.groupby("City")["AQI"]
         .mean()
-        .sort_values(ascending=False)
+        .sort_values(
+            ascending=False
+        )
     )
 
     city = st.selectbox(
         "Monthly AQI trend for city",
-        sorted(df["City"].unique())
+        sorted(
+            df["City"].unique()
+        )
     )
 
     st.line_chart(
-        df[df["City"] == city]
+        df[
+            df["City"] == city
+        ]
         .set_index("Date")["AQI"]
         .resample("MS")
         .mean()
     )
 
-    st.subheader("Cleaned data sample")
+    st.subheader(
+        "Cleaned data sample"
+    )
 
     st.dataframe(
         df.head(20)
@@ -254,6 +312,7 @@ with t3:
 
     # Predictions
     dt_pred = dt.predict(Xte)
+
     nb_pred = nb.predict(Xte)
 
     # Accuracy
@@ -267,7 +326,7 @@ with t3:
         nb_pred
     )
 
-    # Accuracy values
+    # Accuracy metrics
     c1, c2 = st.columns(2)
 
     c1.metric(
@@ -280,7 +339,7 @@ with t3:
         f"{nb_acc:.1%}"
     )
 
-    # DT vs NB comparison graph
+    # Accuracy comparison
     st.subheader(
         "Decision Tree vs Naive Bayes Accuracy"
     )
@@ -302,7 +361,7 @@ with t3:
         comparison
     )
 
-    # Model selection
+    # Confusion matrix selector
     choice = st.radio(
         "Confusion matrix for",
         [
@@ -313,11 +372,8 @@ with t3:
     )
 
     if choice == "Decision Tree":
-
         predictions = dt_pred
-
     else:
-
         predictions = nb_pred
 
     # Confusion matrix
@@ -334,35 +390,32 @@ with t3:
         )
     )
 
-    # Feature importance
+    # Feature importance comparison
     st.subheader(
-        f"{choice} - Feature Importance"
+        "Decision Tree vs Naive Bayes - Feature Importance"
     )
 
-    if choice == "Decision Tree":
+    dt_importance = pd.Series(
+        dt.feature_importances_,
+        index=POLL
+    )
 
-        importance = pd.Series(
-            dt.feature_importances_,
-            index=POLL
-        ).sort_values(
-            ascending=False
-        )
+    nb_importance = pd.Series(
+        abs(
+            nb.theta_.max(axis=0)
+            -
+            nb.theta_.min(axis=0)
+        ),
+        index=POLL
+    )
 
-    else:
-
-        importance = pd.Series(
-            abs(
-                nb.theta_.max(axis=0)
-                -
-                nb.theta_.min(axis=0)
-            ),
-            index=POLL
-        ).sort_values(
-            ascending=False
-        )
+    feature_comparison = pd.DataFrame({
+        "Decision Tree": dt_importance,
+        "Naive Bayes": nb_importance
+    })
 
     st.bar_chart(
-        importance
+        feature_comparison
     )
 
 
@@ -411,7 +464,9 @@ with t4:
         random_state=42
     ).fit_predict(Z)
 
-    cd["Avg AQI"] = df.groupby("City")["AQI"].mean()
+    cd["Avg AQI"] = df.groupby(
+        "City"
+    )["AQI"].mean()
 
     st.scatter_chart(
         cd.reset_index().astype(
@@ -423,7 +478,9 @@ with t4:
     )
 
     st.dataframe(
-        cd.sort_values("Cluster").round(1)
+        cd.sort_values(
+            "Cluster"
+        ).round(1)
     )
 
     st.subheader(
@@ -465,7 +522,10 @@ with t5:
     )
 
     samp = df.sample(
-        min(8000, len(df)),
+        min(
+            8000,
+            len(df)
+        ),
         random_state=1
     )
 
@@ -590,30 +650,111 @@ with t6:
 
     for i, p in enumerate(POLL):
 
-        vals[p] = cols[i % 4].number_input(
+        vals[p] = cols[
+            i % 4
+        ].number_input(
             p,
             0.0,
-            float(df[p].max() * 2),
-            float(df[p].median())
+            float(
+                df[p].max() * 2
+            ),
+            float(
+                df[p].median()
+            )
         )
 
     if st.button("Predict"):
 
         x = pd.DataFrame([vals])
 
+        # Predictions
+        predicted_aqi = reg.predict(x)[0]
+
+        predicted_dt = dt.predict(x)[0]
+
+        predicted_nb = nb.predict(x)[0]
+
         st.success(
             f"Predicted AQI (Regression): "
-            f"{reg.predict(x)[0]:.0f}"
+            f"{predicted_aqi:.0f}"
         )
 
         st.info(
             f"Category (Decision Tree): "
-            f"{dt.predict(x)[0]}"
+            f"{predicted_dt}"
         )
 
         st.info(
             f"Category (Naive Bayes): "
-            f"{nb.predict(x)[0]}"
+            f"{predicted_nb}"
+        )
+
+        # Model performance
+        st.subheader(
+            "Model Performance"
+        )
+
+        dt_precision = precision_score(
+            yte["AQI_Bucket"],
+            dt_pred,
+            average="weighted",
+            zero_division=0
+        )
+
+        dt_recall = recall_score(
+            yte["AQI_Bucket"],
+            dt_pred,
+            average="weighted",
+            zero_division=0
+        )
+
+        nb_precision = precision_score(
+            yte["AQI_Bucket"],
+            nb_pred,
+            average="weighted",
+            zero_division=0
+        )
+
+        nb_recall = recall_score(
+            yte["AQI_Bucket"],
+            nb_pred,
+            average="weighted",
+            zero_division=0
+        )
+
+        performance = pd.DataFrame(
+            {
+                "Accuracy": [
+                    dt_acc,
+                    nb_acc
+                ],
+                "Precision": [
+                    dt_precision,
+                    nb_precision
+                ],
+                "Recall": [
+                    dt_recall,
+                    nb_recall
+                ]
+            },
+            index=[
+                "Decision Tree",
+                "Naive Bayes"
+            ]
+        )
+
+        st.dataframe(
+            performance.style.format(
+                "{:.2%}"
+            )
+        )
+
+        st.subheader(
+            "Accuracy, Precision and Recall"
+        )
+
+        st.bar_chart(
+            performance
         )
 
         st.caption(
