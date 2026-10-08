@@ -192,7 +192,7 @@ def mine_rules(df: pd.DataFrame, sup: float, conf: float) -> pd.DataFrame:
 
 # ---------------- Sidebar & loading ----------------
 
-st.title("Air Quality Analysis - India (Data Mining Mini Project)")
+st.title("Air Quality Analysis - India ")
 
 with st.sidebar:
     st.header("Settings")
